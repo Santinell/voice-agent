@@ -13,7 +13,7 @@ import ast
 import math
 from typing import Any
 
-from ..localization import LocaleStr
+from localization import LocaleStr
 
 # Localised user-facing messages surfaced to the LLM (and onward to TTS).
 _MSG_OK = LocaleStr(

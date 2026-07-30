@@ -2,11 +2,71 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
 
-from s2s_assistant.tools import registry
+from tools import registry
+from tools.scheduling import Recurrence, ScheduledEvent
+
+_T0 = datetime(2026, 7, 30, 8, 0, tzinfo=UTC)
+
+
+class _FakeScheduler:
+    """Records calls and returns deterministic events for dispatch tests."""
+
+    def __init__(self) -> None:
+        self.tz = UTC
+        self.calls: list[tuple[str, tuple[Any, ...]]] = []
+
+    def add_timer(self, seconds: float, label: str | None) -> ScheduledEvent:
+        self.calls.append(("add_timer", (seconds, label)))
+        return ScheduledEvent(
+            id=1,
+            kind="timer",
+            label=label,
+            fire_at_utc=_T0,
+            recurrence=Recurrence.once(),
+            enabled=True,
+            created_at=_T0,
+        )
+
+    def add_alarm(
+        self,
+        hour: int,
+        minute: int,
+        recurrence: Recurrence,
+        label: str | None,
+    ) -> ScheduledEvent:
+        self.calls.append(("add_alarm", (hour, minute, recurrence, label)))
+        return ScheduledEvent(
+            id=2,
+            kind="alarm",
+            label=label,
+            fire_at_utc=datetime(2026, 7, 30, hour, minute, tzinfo=UTC),
+            recurrence=recurrence,
+            enabled=True,
+            created_at=_T0,
+        )
+
+    def add_reminder(
+        self,
+        hour: int,
+        minute: int,
+        message: str,
+        recurrence: Recurrence,
+    ) -> ScheduledEvent:
+        self.calls.append(("add_reminder", (hour, minute, message, recurrence)))
+        return ScheduledEvent(
+            id=3,
+            kind="reminder",
+            label=message,
+            fire_at_utc=datetime(2026, 7, 30, hour, minute, tzinfo=UTC),
+            recurrence=recurrence,
+            enabled=True,
+            created_at=_T0,
+        )
 
 
 class _FakeDeps:
@@ -20,6 +80,16 @@ class _FakeDeps:
         self.http_client = httpx.Client(
             transport=httpx.MockTransport(lambda _: httpx.Response(404))
         )
+        self.scheduler = _FakeScheduler()
+
+
+_ALL_TOOLS = {
+    registry.TOOL_CALCULATE,
+    registry.TOOL_GET_WEATHER,
+    registry.TOOL_SET_TIMER,
+    registry.TOOL_SET_ALARM,
+    registry.TOOL_SET_REMINDER,
+}
 
 
 # ── schema construction ─────────────────────────────────────────────────────
@@ -27,12 +97,12 @@ class _FakeDeps:
 
 def test_tool_schemas_have_stable_names() -> None:
     names = {s.name for s in registry.tool_schemas("ru")}
-    assert names == {registry.TOOL_CALCULATE, registry.TOOL_GET_WEATHER}
+    assert names == _ALL_TOOLS
 
 
 def test_tool_schemas_render_to_realtime_dict() -> None:
     schemas = registry.realtime_tools("en")
-    assert len(schemas) == 2
+    assert len(schemas) == len(_ALL_TOOLS)
     for s in schemas:
         assert s["type"] == "function"
         assert "name" in s
@@ -47,15 +117,27 @@ def test_tool_schemas_are_localized() -> None:
     # Russian descriptions contain Cyrillic; English ones don't.
     assert any("\u0430" <= ch <= "\u044f" for ch in ru[registry.TOOL_CALCULATE])
     assert not any("\u0430" <= ch <= "\u044f" for ch in en[registry.TOOL_CALCULATE])
+    assert any("\u0430" <= ch <= "\u044f" for ch in ru[registry.TOOL_SET_TIMER])
+    assert not any("\u0430" <= ch <= "\u044f" for ch in en[registry.TOOL_SET_TIMER])
+
+
+def test_tool_schemas_show_stt_word_form_examples() -> None:
+    # STT delivers times as number words; the descriptions must teach passing
+    # them verbatim in `time` so the tool (not the LLM) parses "двадцать
+    # тридцать" → 20:30 instead of the model's 23:30 mis-read.
+    ru = {s.name: s.description for s in registry.tool_schemas("ru")}
+    assert "двадцать тридцать" in ru[registry.TOOL_SET_ALARM]
+    assert "time=" in ru[registry.TOOL_SET_ALARM]
+    assert "двадцать тридцать" in ru[registry.TOOL_SET_REMINDER]
+    assert "time=" in ru[registry.TOOL_SET_REMINDER]
+    assert "девяносто секунд" in ru[registry.TOOL_SET_TIMER]
 
 
 # ── dispatch: calculator ────────────────────────────────────────────────────
 
 
 def test_dispatch_calculate() -> None:
-    out = registry.dispatch(
-        registry.TOOL_CALCULATE, '{"expression": "6 * 7"}', _FakeDeps()
-    )
+    out = registry.dispatch(registry.TOOL_CALCULATE, '{"expression": "6 * 7"}', _FakeDeps())
     assert out == "Результат: 42"
 
 
@@ -148,3 +230,129 @@ def test_dispatch_never_raises_on_tool_error() -> None:
     # Division by zero inside calculator → localized message, not exception.
     out = registry.dispatch(registry.TOOL_CALCULATE, '{"expression": "1/0"}', _FakeDeps())
     assert "Деление на ноль" in out
+
+
+# ── dispatch: timer / alarm / reminder ───────────────────────────────────────
+
+
+def test_dispatch_set_timer() -> None:
+    deps = _FakeDeps()
+    out = registry.dispatch(registry.TOOL_SET_TIMER, '{"minutes": 30, "label": "чай"}', deps)
+    assert "Таймер" in out and "30 мин" in out and "08:00" in out
+    assert deps.scheduler.calls == [("add_timer", (1800, "чай"))]
+
+
+def test_dispatch_set_timer_en_and_seconds() -> None:
+    deps = _FakeDeps(language="en")
+    out = registry.dispatch(registry.TOOL_SET_TIMER, '{"seconds": 90}', deps)
+    assert "Timer" in out and "1m 30s" in out
+
+
+def test_dispatch_set_timer_hours_and_minutes() -> None:
+    # "полтора часа" → hours=1, minutes=30
+    deps = _FakeDeps()
+    out = registry.dispatch(registry.TOOL_SET_TIMER, '{"hours": 1, "minutes": 30}', deps)
+    assert "1 ч 30 мин" in out
+    assert deps.scheduler.calls == [("add_timer", (5400, None))]
+
+
+def test_dispatch_set_timer_hours_en() -> None:
+    deps = _FakeDeps(language="en")
+    out = registry.dispatch(registry.TOOL_SET_TIMER, '{"hours": 2}', deps)
+    assert "2h" in out
+
+
+def test_dispatch_set_timer_bad_duration() -> None:
+    out = registry.dispatch(registry.TOOL_SET_TIMER, '{"minutes": 0}', _FakeDeps())
+    assert "положительное время" in out
+
+
+def test_dispatch_set_alarm_weekdays() -> None:
+    deps = _FakeDeps()
+    out = registry.dispatch(
+        registry.TOOL_SET_ALARM,
+        '{"hour": 8, "minute": 0, "recurrence": "weekdays"}',
+        deps,
+    )
+    assert "Будильник" in out and "08:00" in out and "по будням" in out
+
+
+def test_dispatch_set_alarm_bad_clock() -> None:
+    out = registry.dispatch(registry.TOOL_SET_ALARM, '{"hour": 25, "minute": 0}', _FakeDeps())
+    assert "Некорректное время" in out
+
+
+def test_dispatch_set_alarm_weekly_requires_weekdays() -> None:
+    out = registry.dispatch(
+        registry.TOOL_SET_ALARM,
+        '{"hour": 8, "minute": 0, "recurrence": "weekly"}',
+        _FakeDeps(),
+    )
+    assert "повтора" in out
+
+
+def test_dispatch_set_reminder_daily() -> None:
+    deps = _FakeDeps()
+    out = registry.dispatch(
+        registry.TOOL_SET_REMINDER,
+        '{"hour": 19, "minute": 30, "message": "выпить таблетку", "recurrence": "daily"}',
+        deps,
+    )
+    assert "Напоминание" in out and "19:30" in out and "каждый день" in out
+    assert "выпить таблетку" in out
+
+
+def test_dispatch_set_reminder_no_message() -> None:
+    out = registry.dispatch(
+        registry.TOOL_SET_REMINDER,
+        '{"hour": 19, "minute": 30, "message": "  "}',
+        _FakeDeps(),
+    )
+    assert "о чём напомнить" in out
+
+
+def test_dispatch_set_reminder_weekdays_in_24h_format() -> None:
+    # 13:00 must stay 13:00 (not 1 PM) — 24-hour rendering by default.
+    out = registry.dispatch(
+        registry.TOOL_SET_REMINDER,
+        '{"hour": 13, "minute": 0, "message": "поесть"}',
+        _FakeDeps(),
+    )
+    assert "13:00" in out
+
+
+# ── dispatch: spoken `time` parsing (the model must not convert words) ───────
+
+
+def test_dispatch_set_reminder_parses_spoken_time() -> None:
+    # The raw words win over a (wrong) model-supplied hour: "Двадцать тридцать"
+    # must parse to 20:30, not the LLM's 23:30 mis-read.
+    deps = _FakeDeps()
+    out = registry.dispatch(
+        registry.TOOL_SET_REMINDER,
+        '{"time": "Двадцать тридцать", "hour": 23, "minute": 30, "message": "поужинать"}',
+        deps,
+    )
+    assert "20:30" in out and "поужинать" in out
+    assert deps.scheduler.calls == [("add_reminder", (20, 30, "поужинать", Recurrence.once()))]
+
+
+def test_dispatch_set_alarm_parses_spoken_time() -> None:
+    deps = _FakeDeps()
+    out = registry.dispatch(
+        registry.TOOL_SET_ALARM,
+        '{"time": "восемь ноль ноль", "recurrence": "weekdays"}',
+        deps,
+    )
+    assert "08:00" in out and "по будням" in out
+    assert deps.scheduler.calls == [("add_alarm", (8, 0, Recurrence.weekdays(), None))]
+
+
+def test_dispatch_set_reminder_english_spoken_time() -> None:
+    deps = _FakeDeps(language="en")
+    out = registry.dispatch(
+        registry.TOOL_SET_REMINDER,
+        '{"time": "nineteen thirty", "message": "take a pill"}',
+        deps,
+    )
+    assert "19:30" in out and "take a pill" in out

@@ -10,8 +10,8 @@ import logging
 import signal
 import sys
 
-from ..app import build_client
-from ..config import Settings
+from app import build_client
+from config import Settings
 
 
 def main() -> None:

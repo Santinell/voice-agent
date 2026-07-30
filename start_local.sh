@@ -94,6 +94,7 @@ S2S_PID=""
 cleanup() {
   echo
   if [[ "$S2S_STARTED" -eq 1 && -n "$S2S_PID" ]]; then
+    S2S_STARTED=0
     echo "■ Останавливаю speech-to-speech сервер (pid $S2S_PID) …"
     kill "$S2S_PID" 2>/dev/null || true
     wait "$S2S_PID" 2>/dev/null || true
@@ -150,6 +151,7 @@ else
     --qwen3_tts_backend "${QWEN3_TTS_BACKEND:-torch}" \
     --min_silence_ms "${VAD_MIN_SILENCE_MS:-700}" \
     --unanswered_reopen_ms "${VAD_UNANSWERED_REOPEN_MS:-1500}" \
+    --parakeet_tdt_language "$LANGUAGE" \
     --log_level "$LOG_LEVEL" \
     ${S2S_FLAGS:-} \
     &

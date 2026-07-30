@@ -15,7 +15,7 @@ from typing import Any, cast
 
 import httpx
 
-from ..localization import LocaleStr
+from localization import LocaleStr
 
 # ── localised strings ───────────────────────────────────────────────────────
 

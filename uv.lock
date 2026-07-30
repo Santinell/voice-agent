@@ -1227,12 +1227,14 @@ name = "onnxruntime"
 version = "1.28.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "flatbuffers", marker = "sys_platform != 'darwin'" },
+    { name = "flatbuffers" },
+    { name = "numpy", version = "2.4.3", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform == 'darwin'" },
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'darwin'" },
-    { name = "packaging", marker = "sys_platform != 'darwin'" },
-    { name = "protobuf", marker = "sys_platform != 'darwin'" },
+    { name = "packaging" },
+    { name = "protobuf" },
 ]
 wheels = [
+    { url = "https://files.pythonhosted.org/packages/17/4d/5014667e2a3a77d6e1b74cc3d88948d06163b8e0a33a84c85073322b5dec/onnxruntime-1.28.0-cp311-cp311-macosx_14_0_arm64.whl", hash = "sha256:f5c5daabd28aad610f83fdcf32acec8fb57e6adc6c6a39fe2a3c755db957b410", size = 19130506, upload-time = "2026-07-25T01:22:34.489Z" },
     { url = "https://files.pythonhosted.org/packages/ea/97/b7ce1bc8bb6048b5fe9129f55d6506dc19499068ef2e0a0af1ae3c8aa4e7/onnxruntime-1.28.0-cp311-cp311-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:8d66f9ceb29909c70839e4e4fb3435c7b490050d8f162bd5f3aba4ca01ee517f", size = 17039880, upload-time = "2026-07-25T01:21:37.538Z" },
     { url = "https://files.pythonhosted.org/packages/f3/17/4e5ecd8764f87573c495d834ce79e61ecca47f7a01d1e444a606e570edcb/onnxruntime-1.28.0-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:a166b78ee04f3a37fa1ef82034b6a3ce96d9684e582d4d30b296de83e9998bb5", size = 19193162, upload-time = "2026-07-25T01:21:59.151Z" },
     { url = "https://files.pythonhosted.org/packages/9f/10/3d946d5d5f2cdcc3c8da36cae63190c516d16349edaffd944bda60ca4c3e/onnxruntime-1.28.0-cp311-cp311-win_amd64.whl", hash = "sha256:0d650aeee29368414367b65529e90afe4bf1bab76254789063b8b2f7ea3013c8", size = 13752539, upload-time = "2026-07-25T01:22:24.524Z" },
@@ -1256,6 +1258,23 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/56/87/eb0abb4ef88ddb95b3c13149384c4c288f584f3be17d6a4f63f8c3e3c226/openai-2.28.0.tar.gz", hash = "sha256:bb7fdff384d2a787fa82e8822d1dd3c02e8cf901d60f1df523b7da03cbb6d48d", size = 670334, upload-time = "2026-03-13T19:56:27.306Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/c0/5a/df122348638885526e53140e9c6b0d844af7312682b3bde9587eebc28b47/openai-2.28.0-py3-none-any.whl", hash = "sha256:79aa5c45dba7fef84085701c235cf13ba88485e1ef4f8dfcedc44fc2a698fc1d", size = 1141218, upload-time = "2026-03-13T19:56:25.46Z" },
+]
+
+[[package]]
+name = "openwakeword"
+version = "0.6.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "onnxruntime" },
+    { name = "requests" },
+    { name = "scikit-learn" },
+    { name = "scipy" },
+    { name = "tflite-runtime", marker = "sys_platform == 'linux'" },
+    { name = "tqdm" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/b5/9b/73b7d98b07f4e1f525ad39703e0c5f30ff61c3fa16c8bfe4d99eadc0567a/openwakeword-0.6.0.tar.gz", hash = "sha256:36858d90f1183e307485597a912a4e3c3384b14ea9923f83feaffae7c1565565", size = 70830, upload-time = "2024-02-11T20:56:17.854Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/8a/33/dafd6822bebe463a9098951d06a0d88fb4f8c946ce087025bc4fa132e533/openwakeword-0.6.0-py3-none-any.whl", hash = "sha256:6f423a4e3ae9dd0e3cd12b50ff8abf69679f687b4ab349d7c82c021c0e2abc9d", size = 60690, upload-time = "2024-02-11T20:56:16.179Z" },
 ]
 
 [[package]]
@@ -1779,58 +1798,6 @@ wheels = [
 ]
 
 [[package]]
-name = "s2s-assistant"
-version = "0.1.0"
-source = { editable = "." }
-dependencies = [
-    { name = "babel" },
-    { name = "httpx" },
-    { name = "numpy", version = "2.4.3", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform == 'darwin'" },
-    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'darwin'" },
-    { name = "openai" },
-    { name = "python-dotenv" },
-    { name = "sounddevice", version = "0.5.3", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform == 'darwin'" },
-    { name = "sounddevice", version = "0.5.5", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'darwin'" },
-    { name = "websockets" },
-]
-
-[package.optional-dependencies]
-s2s = [
-    { name = "speech-to-speech" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "pyright" },
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-    { name = "ruff" },
-    { name = "taskipy" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "babel", specifier = ">=2.0" },
-    { name = "httpx", specifier = ">=0.27" },
-    { name = "numpy", specifier = ">=1.26" },
-    { name = "openai", specifier = ">=2.28" },
-    { name = "python-dotenv", specifier = ">=1" },
-    { name = "sounddevice", specifier = ">=0.5" },
-    { name = "speech-to-speech", marker = "extra == 's2s'", specifier = ">=0.2.11" },
-    { name = "websockets", specifier = ">=12.0" },
-]
-provides-extras = ["s2s"]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "pyright", specifier = ">=1.1.408" },
-    { name = "pytest", specifier = ">=9.1.1" },
-    { name = "pytest-asyncio", specifier = ">=1.3,<2" },
-    { name = "ruff", specifier = ">=0.15.22" },
-    { name = "taskipy", specifier = ">=1.14.1" },
-]
-
-[[package]]
 name = "safehttpx"
 version = "0.1.7"
 source = { registry = "https://pypi.org/simple" }
@@ -2176,6 +2143,15 @@ wheels = [
 ]
 
 [[package]]
+name = "speexdsp-ns"
+version = "0.1.2"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/6e/16/ab9442ab375407d1a6130fd1a55686eef24cbeec6223f7b5bd358b68c776/speexdsp_ns-0.1.2-cp311-cp311-manylinux_2_28_aarch64.whl", hash = "sha256:a8f47dd7996b7fceee36f983118500a42963541c0701ab16543ad35dc7a351db", size = 156792, upload-time = "2023-08-07T20:34:47.795Z" },
+    { url = "https://files.pythonhosted.org/packages/39/cb/b5c16a514950908d2d9201580946973a84d77ea887eb48fdabdc97f13d6d/speexdsp_ns-0.1.2-cp311-cp311-manylinux_2_28_x86_64.whl", hash = "sha256:986ed698264eab2e9c775382739fd7a6b6800b589594b037062f53928b87ea3f", size = 159862, upload-time = "2023-08-07T20:35:01.411Z" },
+]
+
+[[package]]
 name = "srsly"
 version = "2.5.3"
 source = { registry = "https://pypi.org/simple" }
@@ -2235,6 +2211,19 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/46/79/cf31d7a93a8fdc6aa0fbb665be84426a8c5a557d9240b6239e9e11e35fc5/termcolor-3.3.0.tar.gz", hash = "sha256:348871ca648ec6a9a983a13ab626c0acce02f515b9e1983332b17af7979521c5", size = 14434, upload-time = "2025-12-29T12:55:21.882Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/33/d1/8bb87d21e9aeb323cc03034f5eaf2c8f69841e40e4853c2627edf8111ed3/termcolor-3.3.0-py3-none-any.whl", hash = "sha256:cf642efadaf0a8ebbbf4bc7a31cec2f9b5f21a9f726f4ccbb08192c9c26f43a5", size = 7734, upload-time = "2025-12-29T12:55:20.718Z" },
+]
+
+[[package]]
+name = "tflite-runtime"
+version = "2.14.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'darwin' and sys_platform != 'win32'" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/8f/a6/02d68cb62cd221589a0ff055073251d883936237c9c990e34a1d7cecd06f/tflite_runtime-2.14.0-cp311-cp311-manylinux2014_x86_64.whl", hash = "sha256:195ab752e7e57329a68e54dd3dd5439fad888b9bff1be0f0dc042a3237a90e4d", size = 2414486, upload-time = "2023-10-03T21:15:44.331Z" },
+    { url = "https://files.pythonhosted.org/packages/f2/e9/5fc0435129c23c17551fcfadc82bd0d5482276213dfbc641f07b4420cb6d/tflite_runtime-2.14.0-cp311-cp311-manylinux_2_34_aarch64.whl", hash = "sha256:ce9fa5d770a9725c746dcbf6f59f3178233b3759f09982e8b2db8d2234c333b0", size = 2325913, upload-time = "2023-10-03T21:15:46.348Z" },
+    { url = "https://files.pythonhosted.org/packages/fb/76/e246c39d92929655bac8878d76406d6fb0293c678237e55621e7ece4a269/tflite_runtime-2.14.0-cp311-cp311-manylinux_2_34_armv7l.whl", hash = "sha256:c4e66a74165b18089c86788400af19fa551768ac782d231a9beae2f6434f7949", size = 1820588, upload-time = "2023-10-03T21:15:48.399Z" },
 ]
 
 [[package]]
@@ -2505,6 +2494,64 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/05/c8/2d307868453a4bca6e64fa3581d122ae0748a0869c53f159339def179c7c/uvicorn-0.52.0.tar.gz", hash = "sha256:ca8876ad6c1983f394157c168b39d52f6dd56dabf5602fa0982751cffc2293ae", size = 97504, upload-time = "2026-07-29T08:45:34.065Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/39/e6/b5c0630ace9757232aec07112be8146b812787db52141ff9d50674aa7634/uvicorn-0.52.0-py3-none-any.whl", hash = "sha256:3d887809810b89ed33501bcf0a9aba469b06ecd608158efce04bd6b48d8c9b08", size = 79058, upload-time = "2026-07-29T08:45:32.492Z" },
+]
+
+[[package]]
+name = "voice-agent"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [
+    { name = "babel" },
+    { name = "httpx" },
+    { name = "numpy", version = "2.4.3", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform == 'darwin'" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'darwin'" },
+    { name = "openai" },
+    { name = "openwakeword" },
+    { name = "python-dotenv" },
+    { name = "sounddevice", version = "0.5.3", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform == 'darwin'" },
+    { name = "sounddevice", version = "0.5.5", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'darwin'" },
+    { name = "soxr" },
+    { name = "speexdsp-ns" },
+    { name = "websockets" },
+]
+
+[package.optional-dependencies]
+s2s = [
+    { name = "speech-to-speech" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "pyright" },
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "ruff" },
+    { name = "taskipy" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "babel", specifier = ">=2.0" },
+    { name = "httpx", specifier = ">=0.27" },
+    { name = "numpy", specifier = ">=1.26" },
+    { name = "openai", specifier = ">=2.28" },
+    { name = "openwakeword", specifier = ">=0.6.0" },
+    { name = "python-dotenv", specifier = ">=1" },
+    { name = "sounddevice", specifier = ">=0.5" },
+    { name = "soxr", specifier = ">=0.5" },
+    { name = "speech-to-speech", marker = "extra == 's2s'", specifier = ">=0.2.11" },
+    { name = "speexdsp-ns", specifier = ">=0.1" },
+    { name = "websockets", specifier = ">=12.0" },
+]
+provides-extras = ["s2s"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pyright", specifier = ">=1.1.408" },
+    { name = "pytest", specifier = ">=9.1.1" },
+    { name = "pytest-asyncio", specifier = ">=1.3,<2" },
+    { name = "ruff", specifier = ">=0.15.22" },
+    { name = "taskipy", specifier = ">=1.14.1" },
 ]
 
 [[package]]

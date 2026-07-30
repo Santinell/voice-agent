@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from s2s_assistant.tools import calculator
+from tools import calculator
 
 
 @pytest.mark.parametrize(

@@ -18,8 +18,9 @@ from typing import Any, Protocol, TypeAlias, cast
 
 import httpx
 
-from ..localization import LocaleStr
-from . import calculator, weather
+from localization import LocaleStr
+
+from . import alarm_clock, calculator, reminder, scheduling, timer, weather
 
 # A parsed JSON object — the shape every tool argument payload has.
 JsonObject: TypeAlias = dict[str, Any]
@@ -40,6 +41,47 @@ _WEATHER_DESC = LocaleStr(
     "wind and humidity. Use when the user asks about the weather.",
 )
 
+_TIMER_DESC = LocaleStr(
+    ru="Таймер: засечь время. Запускает обратный отсчёт (hours/minutes/seconds); "
+    "по истечении ассистент сообщает об этом. Длительность приходит от STT "
+    "числительными: «полтора часа» → hours=1, minutes=30; «пол часа» → "
+    "minutes=30; «девяносто секунд» → seconds=90.",
+    en="Timer: start a countdown (hours/minutes/seconds); when it elapses the "
+    "assistant announces it. STT sends durations as words: 'an hour and a half' "
+    "→ hours=1, minutes=30; 'half an hour' → minutes=30; 'ninety seconds' → "
+    "seconds=90.",
+)
+
+_ALARM_DESC = LocaleStr(
+    ru="Будильник. Звонит в указанное время суток, по умолчанию однократно; "
+    "поддерживает повтор (once/daily/weekdays/weekends/weekly). ВАЖНО: время "
+    "передавай в поле time числительными ровно так, как сказал пользователь, НЕ "
+    "переводи в цифры: «двадцать тридцать», «восемь ноль ноль», «девятнадцать "
+    "тридцать». Пример: «каждый будний день в восемь ноль ноль» → time='восемь "
+    "ноль ноль', recurrence=weekdays.",
+    en="Alarm clock. Rings at a given time of day, once by default; supports "
+    "recurrence (once/daily/weekdays/weekends/weekly). IMPORTANT: pass the time "
+    "in the 'time' field as words exactly as the user said it, do NOT convert to "
+    "digits: 'twenty thirty', 'eight hundred', 'nineteen thirty'. Example: "
+    "'every weekday at eight hundred' → time='eight hundred', "
+    "recurrence=weekdays.",
+)
+
+_REMINDER_DESC = LocaleStr(
+    ru="Напоминание. В указанное время ассистент озвучит сообщение; поддерживает "
+    "повтор (once/daily/weekdays/weekends/weekly). ВАЖНО: время передавай в поле "
+    "time числительными ровно так, как сказал пользователь, НЕ переводи в цифры: "
+    "«двадцать тридцать», «девятнадцать тридцать», «восемь ноль ноль». Пример: "
+    "«напоминай каждый день в девятнадцать тридцать выпить таблетку» → "
+    "time='девятнадцать тридцать', message='выпить таблетку', recurrence=daily.",
+    en="Reminder. At the given time the assistant speaks the message; supports "
+    "recurrence (once/daily/weekdays/weekends/weekly). IMPORTANT: pass the time "
+    "in the 'time' field as words exactly as the user said it, do NOT convert to "
+    "digits: 'twenty thirty', 'nineteen thirty', 'eight hundred'. Example: "
+    "'remind me every day at nineteen thirty to take a pill' → time='nineteen "
+    "thirty', message='take a pill', recurrence=daily.",
+)
+
 _MSG_BAD_ARGS = LocaleStr(
     ru="Некорректные аргументы инструмента {tool}: {detail}",
     en="Invalid arguments for tool {tool}: {detail}",
@@ -53,6 +95,9 @@ _MSG_UNKNOWN_TOOL = LocaleStr(
 
 TOOL_CALCULATE = "calculate"
 TOOL_GET_WEATHER = "get_weather"
+TOOL_SET_TIMER = "set_timer"
+TOOL_SET_ALARM = "set_alarm"
+TOOL_SET_REMINDER = "set_reminder"
 
 
 # ── dependencies a tool may need at dispatch time ───────────────────────────
@@ -65,6 +110,7 @@ class ToolDeps(Protocol):
     geocoding_url: str
     forecast_url: str
     http_client: httpx.Client
+    scheduler: scheduling.Scheduler
 
 
 @dataclass(frozen=True)
@@ -97,6 +143,21 @@ def tool_schemas(language: str) -> list[ToolSchema]:
             name=TOOL_GET_WEATHER,
             description=_WEATHER_DESC.render(language),
             parameters=weather.WEATHER_PARAMS,
+        ),
+        ToolSchema(
+            name=TOOL_SET_TIMER,
+            description=_TIMER_DESC.render(language),
+            parameters=timer.TIMER_PARAMS,
+        ),
+        ToolSchema(
+            name=TOOL_SET_ALARM,
+            description=_ALARM_DESC.render(language),
+            parameters=alarm_clock.ALARM_PARAMS,
+        ),
+        ToolSchema(
+            name=TOOL_SET_REMINDER,
+            description=_REMINDER_DESC.render(language),
+            parameters=reminder.REMINDER_PARAMS,
         ),
     ]
 
@@ -131,6 +192,12 @@ def dispatch(name: str, arguments: str, deps: ToolDeps) -> str:
             forecast_url=deps.forecast_url,
             client=deps.http_client,
         )
+    if name == TOOL_SET_TIMER:
+        return timer.set_timer(args, deps.language, deps.scheduler)
+    if name == TOOL_SET_ALARM:
+        return alarm_clock.set_alarm(args, deps.language, deps.scheduler)
+    if name == TOOL_SET_REMINDER:
+        return reminder.set_reminder(args, deps.language, deps.scheduler)
 
     return _MSG_UNKNOWN_TOOL.render(deps.language, tool=name)
 
@@ -158,6 +225,9 @@ __all__ = [
     "ToolSchema",
     "TOOL_CALCULATE",
     "TOOL_GET_WEATHER",
+    "TOOL_SET_TIMER",
+    "TOOL_SET_ALARM",
+    "TOOL_SET_REMINDER",
     "tool_schemas",
     "realtime_tools",
     "dispatch",

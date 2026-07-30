@@ -1,5 +1,5 @@
 [project]
-name = "s2s-assistant"
+name = "voice-agent"
 version = "0.1.0"
 description = "Voice assistant client over a speech-to-speech Realtime server with client-side tools"
 readme = "README.md"
@@ -18,6 +18,10 @@ dependencies = [
   "python-dotenv>=1",
   # Localized rendering (dates, numbers) for tool responses
   "babel>=2.0",
+  # Local wake-word activation and 24 kHz -> 16 kHz streaming resampling
+  "openwakeword>=0.6.0",
+  "soxr>=0.5",
+  "speexdsp-ns>=0.1",
 ]
 
 [project.optional-dependencies]
@@ -44,13 +48,14 @@ dev = [
 
 [tool.taskipy.tasks]
 test = "pytest tests/ -v"
-lint = "ruff check src/s2s_assistant/ tests/"
+lint = "ruff check src/ tests/"
 check-types = "pyright"
 check = "task test && task lint && task check-types"
 
 [project.scripts]
 # Thin CLI: runs the realtime client against a local speech-to-speech server.
-run-client = "s2s_assistant.entrypoints.run_client:main"
+run-client = "entrypoints.run_client:main"
+prepare-wakeword = "entrypoints.prepare_wakeword:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -59,9 +64,16 @@ build-backend = "hatchling.build"
 [tool.uv]
 package = true
 
+[tool.hatch.build.targets.wheel]
+# The modules intentionally live directly in src/ and are imported as
+# `app`, `audio`, `entrypoints`, etc.  Map that directory to the wheel root.
+only-include = ["src"]
+sources = ["src"]
+
 [tool.pyright]
 typeCheckingMode = "strict"
-include = ["src/s2s_assistant"]
+include = ["src"]
+extraPaths = ["src"]
 stubPath = "typings"
 
 [tool.pytest.ini_options]

@@ -8,7 +8,7 @@ from typing import Any
 import httpx
 import pytest
 
-from s2s_assistant.tools import weather
+from tools import weather
 
 _GEO_URL = "https://geocoding.example/v1/search"
 _FORE_URL = "https://forecast.example/v1/forecast"
@@ -265,9 +265,7 @@ def test_json_of_forecast_is_fetched_with_current_fields() -> None:
         "Moscow", language="ru", geocoding_url=_GEO_URL, forecast_url=_FORE_URL, client=client
     )
     # httpx encodes the list param as repeated `current=<field>` pairs.
-    fields = {
-        v for k, v in captured["params"].multi_items() if k == "current"
-    }
+    fields = {v for k, v in captured["params"].multi_items() if k == "current"}
     assert {
         "temperature_2m",
         "relative_humidity_2m",

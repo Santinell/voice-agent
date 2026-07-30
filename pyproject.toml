@@ -1,0 +1,76 @@
+[project]
+name = "s2s-assistant"
+version = "0.1.0"
+description = "Voice assistant client over a speech-to-speech Realtime server with client-side tools"
+readme = "README.md"
+requires-python = ">=3.11,<3.12"
+dependencies = [
+  # OpenAI Realtime-compatible client (talks to huggingface/speech-to-speech server)
+  "openai>=2.28",
+  # websockets is an optional extra of `openai` but required for realtime.
+  "websockets>=12.0",
+  # HTTP for tools (Open-Meteo weather, geocoding)
+  "httpx>=0.27",
+  # Microphone capture + speaker playback
+  "sounddevice>=0.5",
+  "numpy>=1.26",
+  # Config / env
+  "python-dotenv>=1",
+  # Localized rendering (dates, numbers) for tool responses
+  "babel>=2.0",
+]
+
+[project.optional-dependencies]
+# The huggingface/speech-to-speech Realtime SERVER as a convenience extra.
+# It is a separate process, not a library the client imports — listed here so a
+# single `uv sync --extra s2s` also installs the `speech-to-speech` CLI.
+# Heavy: pulls torch / torchaudio / transformers + downloads STT/TTS models.
+# Note: s2s pins openai==2.28.0, which uv resolves against our openai>=2.28.
+#
+# Pinned to >=0.2.11: that release added the `chat-completions` LLM backend
+# (CLI flag `--llm_backend`), which is what z.ai / most OpenAI-compatible
+# providers expose. Earlier 0.2.2 only has the `responses-api` backend, which
+# POSTs to /responses — that endpoint 404s on z.ai (Chat Completions only).
+s2s = ["speech-to-speech>=0.2.11"]
+
+[dependency-groups]
+dev = [
+  "pytest>=9.1.1",
+  "pytest-asyncio>=1.3,<2",
+  "pyright>=1.1.408",
+  "ruff>=0.15.22",
+  "taskipy>=1.14.1",
+]
+
+[tool.taskipy.tasks]
+test = "pytest tests/ -v"
+lint = "ruff check src/s2s_assistant/ tests/"
+check-types = "pyright"
+check = "task test && task lint && task check-types"
+
+[project.scripts]
+# Thin CLI: runs the realtime client against a local speech-to-speech server.
+run-client = "s2s_assistant.entrypoints.run_client:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+package = true
+
+[tool.pyright]
+typeCheckingMode = "strict"
+include = ["src/s2s_assistant"]
+stubPath = "typings"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]

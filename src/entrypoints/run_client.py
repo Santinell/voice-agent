@@ -15,11 +15,11 @@ from config import Settings
 
 
 def main() -> None:
+    settings = Settings.from_env()
     logging.basicConfig(
-        level=logging.INFO,
+        level=settings.log_level,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
-    settings = Settings.from_env()
     if not settings.llm_api_key:
         # The OpenAI client needs *some* key to construct, even if the s2s
         # server ignores it. Warn loudly so a missing key isn't silent.

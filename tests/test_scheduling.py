@@ -168,16 +168,18 @@ def _ev(kind: str, **kw: object) -> ScheduledEvent:
 def test_fire_message_reminder_includes_text() -> None:
     msg = scheduling.fire_message(_ev("reminder", label="выпить таблетку"), "ru", _TZ)
     assert "Напоминание" in msg and "выпить таблетку" in msg
+    assert "[СИСТЕМНОЕ СОБЫТИЕ" in msg
 
 
 def test_fire_message_alarm_includes_time() -> None:
     msg = scheduling.fire_message(_ev("alarm"), "ru", _TZ)
     assert "08:00" in msg and "будильник" in msg.lower()
+    assert "[СИСТЕМНОЕ СОБЫТИЕ" in msg
 
 
 def test_fire_message_timer_includes_label() -> None:
     msg = scheduling.fire_message(_ev("timer", label="чай"), "ru", _TZ)
-    assert "Таймер" in msg and "«чай»" in msg
+    assert "таймер" in msg and "«чай»" in msg and "[СИСТЕМНОЕ СОБЫТИЕ" in msg
 
 
 # ── SchedulerStore (SQLite, in-memory) ───────────────────────────────────────

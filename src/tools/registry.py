@@ -20,7 +20,17 @@ import httpx
 
 from localization import LocaleStr
 
-from . import alarm_clock, calculator, reminder, scheduling, timer, weather
+from . import (
+    alarm_clock,
+    calculator,
+    read_url,
+    reminder,
+    scheduling,
+    time_tool,
+    timer,
+    weather,
+    web_search,
+)
 
 # A parsed JSON object — the shape every tool argument payload has.
 JsonObject: TypeAlias = dict[str, Any]
@@ -82,6 +92,35 @@ _REMINDER_DESC = LocaleStr(
     "thirty', message='take a pill', recurrence=daily.",
 )
 
+_TIME_DESC = LocaleStr(
+    ru="Текущее время, дата и день недели в часовом поясе пользователя. "
+    "Используй, когда пользователь спрашивает «который час?», «сколько "
+    "времени?», «какое сегодня число?» или «какой сегодня день недели?».",
+    en="Current time, date and day of week in the user's timezone. Use when the "
+    "user asks 'what time is it?', 'what's today's date?' or 'what day of the "
+    "week is it?'.",
+)
+
+_WEB_SEARCH_DESC = LocaleStr(
+    ru="Поиск в интернете. Возвращает несколько результатов: заголовок, ссылку и "
+    "краткое описание. Используй, когда нужен свежий факт, которого нет в твоих "
+    "знаниях: новости, цены, релизы, текущие события. Сначала поищи, потом "
+    "коротко ответь своими словами.",
+    en="Web search. Returns a few results: title, link and a short snippet. Use "
+    "when you need a fresh fact not in your training: news, prices, releases, "
+    "current events. Search first, then answer briefly in your own words.",
+)
+
+_READ_URL_DESC = LocaleStr(
+    ru="Скачать страницу по ссылке и прочитать содержимое как текст. "
+    "Используй, чтобы открыть конкретный URL, который дал пользователь или "
+    "который ты нашёл через web_search. Возвращает основной текст страницы "
+    "(сокращённый), без меню и рекламы.",
+    en="Fetch a page by URL and read its content as text. Use to open a specific "
+    "URL the user gave or that you found via web_search. Returns the page's main "
+    "text (truncated), without menus and ads.",
+)
+
 _MSG_BAD_ARGS = LocaleStr(
     ru="Некорректные аргументы инструмента {tool}: {detail}",
     en="Invalid arguments for tool {tool}: {detail}",
@@ -95,9 +134,12 @@ _MSG_UNKNOWN_TOOL = LocaleStr(
 
 TOOL_CALCULATE = "calculate"
 TOOL_GET_WEATHER = "get_weather"
+TOOL_GET_TIME = "get_time"
 TOOL_SET_TIMER = "set_timer"
 TOOL_SET_ALARM = "set_alarm"
 TOOL_SET_REMINDER = "set_reminder"
+TOOL_WEB_SEARCH = "web_search"
+TOOL_READ_URL = "read_url"
 
 
 # ── dependencies a tool may need at dispatch time ───────────────────────────
@@ -111,6 +153,11 @@ class ToolDeps(Protocol):
     forecast_url: str
     http_client: httpx.Client
     scheduler: scheduling.Scheduler
+    # Web tools (optional keys; empty → free fallback). fetch_client follows
+    # redirects because direct page fetches hit short-link/canonical hops.
+    exa_api_key: str
+    reader_api_key: str
+    fetch_client: httpx.Client
 
 
 @dataclass(frozen=True)
@@ -143,6 +190,21 @@ def tool_schemas(language: str) -> list[ToolSchema]:
             name=TOOL_GET_WEATHER,
             description=_WEATHER_DESC.render(language),
             parameters=weather.WEATHER_PARAMS,
+        ),
+        ToolSchema(
+            name=TOOL_GET_TIME,
+            description=_TIME_DESC.render(language),
+            parameters=time_tool.TIME_PARAMS,
+        ),
+        ToolSchema(
+            name=TOOL_WEB_SEARCH,
+            description=_WEB_SEARCH_DESC.render(language),
+            parameters=web_search.WEB_SEARCH_PARAMS,
+        ),
+        ToolSchema(
+            name=TOOL_READ_URL,
+            description=_READ_URL_DESC.render(language),
+            parameters=read_url.READ_URL_PARAMS,
         ),
         ToolSchema(
             name=TOOL_SET_TIMER,
@@ -192,12 +254,29 @@ def dispatch(name: str, arguments: str, deps: ToolDeps) -> str:
             forecast_url=deps.forecast_url,
             client=deps.http_client,
         )
+    if name == TOOL_GET_TIME:
+        return time_tool.get_time(deps.language, deps.scheduler.tz)
     if name == TOOL_SET_TIMER:
         return timer.set_timer(args, deps.language, deps.scheduler)
     if name == TOOL_SET_ALARM:
         return alarm_clock.set_alarm(args, deps.language, deps.scheduler)
     if name == TOOL_SET_REMINDER:
         return reminder.set_reminder(args, deps.language, deps.scheduler)
+    if name == TOOL_WEB_SEARCH:
+        return web_search.search(
+            args.get("query", ""),
+            language=deps.language,
+            exa_api_key=deps.exa_api_key,
+            client=deps.http_client,
+        )
+    if name == TOOL_READ_URL:
+        return read_url.read_url(
+            args.get("url", ""),
+            language=deps.language,
+            reader_api_key=deps.reader_api_key,
+            client=deps.http_client,
+            fetch_client=deps.fetch_client,
+        )
 
     return _MSG_UNKNOWN_TOOL.render(deps.language, tool=name)
 
@@ -225,9 +304,12 @@ __all__ = [
     "ToolSchema",
     "TOOL_CALCULATE",
     "TOOL_GET_WEATHER",
+    "TOOL_GET_TIME",
     "TOOL_SET_TIMER",
     "TOOL_SET_ALARM",
     "TOOL_SET_REMINDER",
+    "TOOL_WEB_SEARCH",
+    "TOOL_READ_URL",
     "tool_schemas",
     "realtime_tools",
     "dispatch",

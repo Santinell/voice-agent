@@ -84,6 +84,11 @@ def build_client(settings: Settings) -> RealtimeClient:
         forecast_url=settings.forecast_url,
         http_client=httpx.Client(),
         scheduler=scheduler,
+        exa_api_key=settings.exa_api_key,
+        reader_api_key=settings.reader_api_key,
+        # Direct page fetches need to follow redirects (short-link / canonical
+        # hops); the shared http_client stays redirect-strict for the JSON APIs.
+        fetch_client=httpx.Client(follow_redirects=True),
     )
     return RealtimeClient(
         settings=settings,

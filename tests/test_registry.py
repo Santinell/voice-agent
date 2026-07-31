@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime
 from typing import Any
 
@@ -72,23 +73,34 @@ class _FakeScheduler:
 class _FakeDeps:
     """Minimal ToolDeps for dispatch tests (no real network)."""
 
-    def __init__(self, *, language: str = "ru") -> None:
+    def __init__(
+        self,
+        *,
+        language: str = "ru",
+        transport: httpx.BaseTransport | None = None,
+    ) -> None:
         self.language = language
         self.geocoding_url = "https://geocoding.example/v1/search"
         self.forecast_url = "https://forecast.example/v1/forecast"
         # A client whose transport always 404s — weather tests inject their own.
-        self.http_client = httpx.Client(
-            transport=httpx.MockTransport(lambda _: httpx.Response(404))
-        )
+        # web_search/read_url tests can pass a routing transport.
+        t = transport or httpx.MockTransport(lambda _: httpx.Response(404))
+        self.http_client = httpx.Client(transport=t)
+        self.fetch_client = httpx.Client(transport=t)
         self.scheduler = _FakeScheduler()
+        self.exa_api_key = ""
+        self.reader_api_key = ""
 
 
 _ALL_TOOLS = {
     registry.TOOL_CALCULATE,
     registry.TOOL_GET_WEATHER,
+    registry.TOOL_GET_TIME,
     registry.TOOL_SET_TIMER,
     registry.TOOL_SET_ALARM,
     registry.TOOL_SET_REMINDER,
+    registry.TOOL_WEB_SEARCH,
+    registry.TOOL_READ_URL,
 }
 
 
@@ -198,6 +210,13 @@ def test_dispatch_weather_not_found() -> None:
     out = registry.dispatch(registry.TOOL_GET_WEATHER, '{"city": "Atlantis"}', deps)
     assert "Не нашёл" in out
     assert "Atlantis" in out
+
+
+def test_dispatch_get_time_returns_localized_sentence() -> None:
+    # _FakeDeps uses tz=UTC; just assert the sentence shape, not the exact clock.
+    out = registry.dispatch(registry.TOOL_GET_TIME, "{}", _FakeDeps())
+    assert "Сейчас" in out
+    assert re.search(r"\b\d{2}:\d{2}\b", out)
 
 
 # ── dispatch: argument parsing & error paths ────────────────────────────────

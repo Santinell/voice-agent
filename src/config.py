@@ -26,6 +26,19 @@ def _env_bool(value: str, *, default: bool) -> bool:
     return value.lower() in {"1", "true", "yes", "on"}
 
 
+_VALID_LOG_LEVELS = frozenset({"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"})
+
+
+def _resolve_log_level(value: str) -> str:
+    """Normalize a LOG_LEVEL env value to a valid ``logging`` level name.
+
+    Case-insensitive; an empty or unknown name falls back to ``INFO`` rather than
+    silently disabling logging (a typo shouldn't hide every log line).
+    """
+    name = value.strip().upper()
+    return name if name in _VALID_LOG_LEVELS else "INFO"
+
+
 @dataclass(frozen=True)
 class WakeWordSettings:
     """Local wake-word gate configuration.
@@ -177,6 +190,14 @@ class Settings:
     # IANA timezone (e.g. "Europe/Moscow") for scheduling clock times; empty =
     # system local. Times render and are interpreted in 24-hour format.
     timezone: str = ""
+    # Console logging verbosity: a standard logging level name (DEBUG/INFO/
+    # WARNING/ERROR/CRITICAL), case-insensitive. Invalid names fall back to INFO.
+    log_level: str = "INFO"
+    # Web tools (optional). Both work without a key via free fallback:
+    # EXA_API_KEY → Exa search, else DuckDuckGo HTML. READER_API_KEY → Jina
+    # Reader (500 RPM), else Jina Reader anonymous (20 RPM), else direct fetch.
+    exa_api_key: str = ""
+    reader_api_key: str = ""
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -201,6 +222,9 @@ class Settings:
             wake_word=WakeWordSettings.from_env(),
             schedule_db=Path(_get("SCHEDULE_DB", ".local/schedule.db")).expanduser(),
             timezone=_get("TIMEZONE", "").strip(),
+            log_level=_resolve_log_level(_get("LOG_LEVEL", "INFO")),
+            exa_api_key=_get("EXA_API_KEY", "").strip(),
+            reader_api_key=_get("READER_API_KEY", "").strip(),
         )
 
 

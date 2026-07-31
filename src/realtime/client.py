@@ -26,22 +26,25 @@ from tools.scheduling import ScheduledEvent, Scheduler, fire_message
 log = logging.getLogger("voice-agent.realtime")
 
 _SYSTEM_PROMPT_RU = (
-    "Ты голосовой ассистент. Отвечай ОЧЕНЬ коротко — максимум одно-два "
-    "предложения, как в живом диалоге. Никакого Markdown, списков и разметки, "
-    "никаких длинных пояснений. Если нужен точный ответ (погода, вычисления) — "
-    "вызывай соответствующий инструмент, а потом озвучь результат одной фразой "
-    "простыми словами на языке пользователя. "
+    "Ты голосовой ассистент. Отвечай как в живом диалоге. "
+    "Никакого Markdown, списков и разметки, никаких длинных пояснений. "
+    "Если нужен точный ответ (погода, вычисления, информация в интернете) — "
+    "вызывай соответствующий инструмент, а потом озвучь результат на языке пользователя. "
     "Напоминания, будильники и таймеры выполняй ТОЛЬКО через инструменты "
     "set_reminder, set_alarm, set_timer — сам ты ничего не запоминаешь, и без "
     "вызова инструмента напоминание не поставится и не прозвенит. Не отвечай "
     "«напомню/засёк» словами без вызова инструмента. Сначала вызови инструмент, "
     "затем коротко подтверди время из его ответа. Время всегда в 24-часовом "
-    "формате."
+    "формате. "
+    "Сообщение, начинающееся с «[СИСТЕМНОЕ СОБЫТИЕ …]» — это внутреннее "
+    "уведомление от планировщика, что сработало напоминание, будильник или "
+    "таймер, а НЕ запрос пользователя. Не задавай уточняющих вопросов и не "
+    "вызывай инструменты — просто озвучь суть одной короткой фразой."
 )
 _SYSTEM_PROMPT_EN = (
-    "You are a voice assistant. Reply VERY briefly — at most one or two "
-    "sentences, like a live conversation. No Markdown, lists or markup, no long "
-    "explanations. When a precise answer is needed (weather, calculations), call "
+    "You are a voice assistant. Reply like a live conversation. "
+    "No Markdown, lists or markup, no long explanations. "
+    "When a precise answer is needed (weather, calculations, web search), call "
     "the matching tool and then speak the result in a single plain sentence in "
     "the user's language. "
     "Reminders, alarms and timers MUST be done only via the set_reminder, "
@@ -49,7 +52,11 @@ _SYSTEM_PROMPT_EN = (
     "calling the tool nothing is scheduled and nothing will ring. Never reply "
     "'I'll remind you / starting a timer' in words without calling the tool. "
     "Call the tool first, then briefly confirm the time taken from its reply. "
-    "Times are always in 24-hour format."
+    "Times are always in 24-hour format. "
+    'A message beginning with "[SYSTEM EVENT ...]" is an internal notification '
+    "from the scheduler that a reminder, alarm or timer has just fired — it is "
+    "NOT a user request. Do not ask clarifying questions and do not call tools; "
+    "just state the gist in one short sentence."
 )
 
 
@@ -69,6 +76,9 @@ class ToolDeps:
     forecast_url: str
     http_client: httpx.Client
     scheduler: Scheduler
+    exa_api_key: str = ""
+    reader_api_key: str = ""
+    fetch_client: httpx.Client = field(default_factory=httpx.Client)
 
 
 @dataclass

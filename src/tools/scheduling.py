@@ -309,17 +309,26 @@ def resolve_clock(args: dict[str, Any], language: str) -> tuple[int, int] | str:
 # ── fire-message text injected into the conversation when an event fires ─────
 
 
+# Injected as a user-role item, so they must be unmistakably NOT a user
+# request: a leading [SYSTEM EVENT] marker tells the model this is an internal
+# notification it must relay aloud, not a command to act on or call tools for.
 _FIRE_TIMER = LocaleStr(
-    ru="Таймер{label} истёк. Коротко сообщи пользователю.",
-    en="Timer{label} elapsed. Tell the user briefly.",
+    ru="[СИСТЕМНОЕ СОБЫТИЕ: таймер] Истёк таймер{label}. Просто озвучь это "
+    "пользователю одной короткой фразой. Не задавай вопросов и не вызывай инструменты.",
+    en="[SYSTEM EVENT: timer] Timer{label} elapsed. Just announce it to the user in "
+    "one short sentence. Do not ask questions or call tools.",
 )
 _FIRE_ALARM = LocaleStr(
-    ru="Звонит будильник на {time}{label}. Коротко разбуди пользователя.",
-    en="Alarm ringing for {time}{label}. Briefly wake the user.",
+    ru="[СИСТЕМНОЕ СОБЫТИЕ: будильник] Звонит будильник на {time}{label}. "
+    "Коротко разбуди пользователя. Не задавай вопросов и не вызывай инструменты.",
+    en="[SYSTEM EVENT: alarm] Alarm ringing for {time}{label}. Briefly wake the user. "
+    "Do not ask questions or call tools.",
 )
 _FIRE_REMINDER = LocaleStr(
-    ru="Напоминание: {message}. Коротко сообщи пользователю.",
-    en="Reminder: {message}. Tell the user briefly.",
+    ru="[СИСТЕМНОЕ СОБЫТИЕ: напоминание] Напоминание: {message}. Просто озвучь это "
+    "пользователю одной короткой фразой. Не задавай вопросов и не вызывай инструменты.",
+    en="[SYSTEM EVENT: reminder] Reminder: {message}. Just announce it to the user in "
+    "one short sentence. Do not ask questions or call tools.",
 )
 
 _MSG_BAD_CLOCK = LocaleStr(
@@ -329,7 +338,12 @@ _MSG_BAD_CLOCK = LocaleStr(
 
 
 def fire_message(event: ScheduledEvent, language: str, tz: tzinfo) -> str:
-    """Build the user-role text the assistant relays when an event fires."""
+    """Build the text the assistant relays aloud when an event fires.
+
+    Carries a leading ``[СИСТЕМНОЕ СОБЫТИЕ …]`` / ``[SYSTEM EVENT …]`` marker so
+    that, even though it is delivered through a user-role item, the model treats
+    it as an internal notification to announce rather than a fresh user request.
+    """
     label_part = f" «{event.label}»" if event.label else ""
     if event.kind == KIND_ALARM:
         return _FIRE_ALARM.render(

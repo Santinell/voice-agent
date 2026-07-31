@@ -22,6 +22,14 @@ dependencies = [
   "openwakeword>=0.6.0",
   "soxr>=0.5",
   "speexdsp-ns>=0.1",
+  # HTML parsing (DuckDuckGo fallback search results) + HTML→markdown for the
+  # direct-fetch fallback of read_url.
+  "beautifulsoup4>=4.12",
+  "html2text>=2024.2.26",
+  # CDP client for the headless-browser SPA fallback of read_url. Drives an
+  # already-installed system Chromium-based browser (brave/yandex/chromium);
+  # no browser binary ships with the package.
+  "pychrome>=0.2.4",
 ]
 
 [project.optional-dependencies]

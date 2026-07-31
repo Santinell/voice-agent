@@ -1,4 +1,4 @@
-# s2s-assistant
+# Voice Agent
 
 Voice assistant **client** that talks to a locally running
 [`huggingface/speech-to-speech`](https://github.com/huggingface/speech-to-speech)
@@ -110,18 +110,18 @@ hard active timeout expires.
 
 Useful tuning variables:
 
-| Variable                         | Default | Purpose                                      |
-| -------------------------------- | ------: | -------------------------------------------- |
-| `WAKE_WORD_THRESHOLD`            |    0.35 | detection score threshold                    |
-| `WAKE_WORD_GAIN`                 |     1.0 | detector-only software input gain            |
-| `WAKE_WORD_PATIENCE`             |       1 | consecutive positive 80 ms frames            |
-| `WAKE_WORD_VAD_THRESHOLD`        |     0.5 | local speech filter; `0` disables it         |
-| `ACTIVATION_LISTEN_TIMEOUT_SEC`  |       8 | rearm if no command follows the earcon       |
-| `FOLLOW_UP_WINDOW_SEC`           |      10 | dialogue window after final audio playback   |
-| `MAX_ACTIVE_SEC`                 |      90 | hard cap for a stuck activation cycle        |
-| `POST_EARCON_SILENCE_MS`         |     120 | output guard before microphone forwarding    |
-| `DEACTIVATION_EARCON_START_HZ`   |     660 | beginning of the descending sleep cue        |
-| `DEACTIVATION_EARCON_END_HZ`     |     440 | end of the descending sleep cue              |
+| Variable                        | Default | Purpose                                    |
+| ------------------------------- | ------: | ------------------------------------------ |
+| `WAKE_WORD_THRESHOLD`           |    0.35 | detection score threshold                  |
+| `WAKE_WORD_GAIN`                |     1.0 | detector-only software input gain          |
+| `WAKE_WORD_PATIENCE`            |       1 | consecutive positive 80 ms frames          |
+| `WAKE_WORD_VAD_THRESHOLD`       |     0.5 | local speech filter; `0` disables it       |
+| `ACTIVATION_LISTEN_TIMEOUT_SEC` |       8 | rearm if no command follows the earcon     |
+| `FOLLOW_UP_WINDOW_SEC`          |      10 | dialogue window after final audio playback |
+| `MAX_ACTIVE_SEC`                |      90 | hard cap for a stuck activation cycle      |
+| `POST_EARCON_SILENCE_MS`        |     120 | output guard before microphone forwarding  |
+| `DEACTIVATION_EARCON_START_HZ`  |     660 | beginning of the descending sleep cue      |
+| `DEACTIVATION_EARCON_END_HZ`    |     440 | end of the descending sleep cue            |
 
 The full design and test matrix are recorded in
 [WAKE_WORD.md](WAKE_WORD.md).

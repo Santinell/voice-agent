@@ -31,6 +31,15 @@ from . import (
     weather,
     web_search,
 )
+from . import (
+    exa as exa_mod,
+)
+from . import (
+    firecrawl as firecrawl_mod,
+)
+from . import (
+    jina as jina_mod,
+)
 
 # A parsed JSON object — the shape every tool argument payload has.
 JsonObject: TypeAlias = dict[str, Any]
@@ -153,10 +162,11 @@ class ToolDeps(Protocol):
     forecast_url: str
     http_client: httpx.Client
     scheduler: scheduling.Scheduler
-    # Web tools (optional keys; empty → free fallback). fetch_client follows
+    # Web tools (optional; None → free fallback). fetch_client follows
     # redirects because direct page fetches hit short-link/canonical hops.
-    exa_api_key: str
-    reader_api_key: str
+    firecrawl: firecrawl_mod.FirecrawlClient | None
+    exa: exa_mod.ExaClient | None
+    jina: jina_mod.JinaClient | None
     fetch_client: httpx.Client
 
 
@@ -266,14 +276,18 @@ def dispatch(name: str, arguments: str, deps: ToolDeps) -> str:
         return web_search.search(
             args.get("query", ""),
             language=deps.language,
-            exa_api_key=deps.exa_api_key,
+            firecrawl=deps.firecrawl,
+            jina=deps.jina,
+            exa=deps.exa,
             client=deps.http_client,
         )
     if name == TOOL_READ_URL:
         return read_url.read_url(
             args.get("url", ""),
             language=deps.language,
-            reader_api_key=deps.reader_api_key,
+            firecrawl=deps.firecrawl,
+            jina=deps.jina,
+            exa=deps.exa,
             client=deps.http_client,
             fetch_client=deps.fetch_client,
         )

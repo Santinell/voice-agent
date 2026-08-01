@@ -16,8 +16,13 @@ from audio.playback import AudioPlayer, make_earcon
 from audio.resample import SoxrWakeResampler, WakeFrameBuffer
 from audio.wakeword import OpenWakeWordDetector
 from config import Settings
+from db import connect, migrate
 from realtime.client import RealtimeClient, ToolDeps, WakeWordRuntime
+from tools.exa import ExaClient
+from tools.firecrawl import FirecrawlClient
+from tools.jina import JinaClient
 from tools.scheduling import Scheduler, SchedulerStore
+from tools.secrets import SecretStore
 
 
 def _resolve_tz(name: str) -> tzinfo:
@@ -75,17 +80,31 @@ def build_client(settings: Settings) -> RealtimeClient:
             ),
         )
 
+    # One migrated DB + one shared connection for every store. The web tools
+    # get a shared HTTP client and their per-backend clients; Jina also needs
+    # the secret store to persist its auto-minted trial key.
+    migrate(settings.db_path)
+    conn = connect(settings.db_path)
+    secrets = SecretStore(conn)
+    http_client = httpx.Client()
+    jina = JinaClient(
+        secrets=secrets, api_key=settings.jina_api_key, client=http_client
+    )
+    firecrawl = FirecrawlClient(api_key=settings.firecrawl_api_key, client=http_client)
+    exa = ExaClient(api_key=settings.exa_api_key, client=http_client)
+
     scheduler = Scheduler(
-        SchedulerStore(settings.schedule_db), tz=_resolve_tz(settings.timezone)
+        SchedulerStore(conn), tz=_resolve_tz(settings.timezone)
     )
     deps = ToolDeps(
         language=settings.language,
         geocoding_url=settings.geocoding_url,
         forecast_url=settings.forecast_url,
-        http_client=httpx.Client(),
+        http_client=http_client,
         scheduler=scheduler,
-        exa_api_key=settings.exa_api_key,
-        reader_api_key=settings.reader_api_key,
+        firecrawl=firecrawl,
+        exa=exa,
+        jina=jina,
         # Direct page fetches need to follow redirects (short-link / canonical
         # hops); the shared http_client stays redirect-strict for the JSON APIs.
         fetch_client=httpx.Client(follow_redirects=True),

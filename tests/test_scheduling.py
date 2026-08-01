@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import sqlite3
 import time
 from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
 
+from db import connect, migrate
 from tools import scheduling
 from tools.scheduling import (
     Recurrence,
@@ -15,6 +17,33 @@ from tools.scheduling import (
     Scheduler,
     SchedulerStore,
 )
+
+
+def _mem_conn() -> sqlite3.Connection:
+    """An in-memory connection with the schema migrated onto it.
+
+    ``:memory:`` works only if the same connection object is reused; the store
+    injects and caches exactly this connection.
+    """
+    conn = sqlite3.connect(":memory:", check_same_thread=False, isolation_level=None)
+    conn.row_factory = sqlite3.Row
+    # Apply the migration DDL directly to the in-memory DB (yoyo needs a file).
+    conn.execute(_SCHEDULED_EVENTS_DDL)
+    return conn
+
+
+# Mirrors the 0001 migration's scheduled_events DDL (in-memory tests skip yoyo).
+_SCHEDULED_EVENTS_DDL = """
+CREATE TABLE scheduled_events (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    kind       TEXT    NOT NULL,
+    label      TEXT,
+    fire_at    TEXT    NOT NULL,
+    weekdays   TEXT,
+    enabled    INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT    NOT NULL
+)
+"""
 
 # +05:00 mirrors the deployment timezone; lets us assert UTC conversions.
 _TZ = timezone(timedelta(hours=5))
@@ -186,7 +215,7 @@ def test_fire_message_timer_includes_label() -> None:
 
 
 def test_store_add_round_trip_preserves_recurrence() -> None:
-    store = SchedulerStore(":memory:")
+    store = SchedulerStore(_mem_conn())
     event = store.add(_ev("alarm", label="work", recurrence=Recurrence.weekdays()))
     assert event.id == 1
     listed = store.list()
@@ -200,7 +229,7 @@ def test_store_add_round_trip_preserves_recurrence() -> None:
 
 
 def test_store_due_and_count() -> None:
-    store = SchedulerStore(":memory:")
+    store = SchedulerStore(_mem_conn())
     now = datetime(2026, 7, 30, 12, 0, tzinfo=_UTC)
     past = store.add(_ev("timer", fire_at_utc=now - timedelta(minutes=5)))
     store.add(_ev("timer", fire_at_utc=now + timedelta(minutes=5)))
@@ -213,7 +242,7 @@ def test_store_due_and_count() -> None:
 
 
 def test_store_set_fire_at_delete_delete_kind() -> None:
-    store = SchedulerStore(":memory:")
+    store = SchedulerStore(_mem_conn())
     now = datetime(2026, 7, 30, 12, 0, tzinfo=_UTC)
     e = store.add(_ev("alarm"))
     store.set_fire_at(e.id, now + timedelta(days=1))  # type: ignore[arg-type]
@@ -228,10 +257,12 @@ def test_store_set_fire_at_delete_delete_kind() -> None:
 
 def test_store_persists_across_reopen(tmp_path: Path) -> None:
     path = tmp_path / "s.db"
-    a = SchedulerStore(path)
+    migrate(path)
+    a = SchedulerStore(connect(path))
     a.add(_ev("reminder", label="pill"))
     a.close()
-    b = SchedulerStore(path)
+    # Reopen the same file via a fresh connection; the row survives.
+    b = SchedulerStore(connect(path))
     rows = b.list()
     assert len(rows) == 1
     assert rows[0].kind == "reminder"
@@ -243,7 +274,7 @@ def test_store_persists_across_reopen(tmp_path: Path) -> None:
 
 
 def _scheduler(now: datetime) -> Scheduler:
-    return Scheduler(SchedulerStore(":memory:"), tz=_TZ, now_utc=lambda: now)
+    return Scheduler(SchedulerStore(_mem_conn()), tz=_TZ, now_utc=lambda: now)
 
 
 def test_add_timer_and_add_alarm_store_correctly() -> None:

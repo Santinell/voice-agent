@@ -6,7 +6,7 @@ import logging
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import httpx
 from openai import OpenAI
@@ -22,6 +22,11 @@ from audio.wakeword import WakeDetection, WakeDetector
 from config import Settings
 from tools import registry
 from tools.scheduling import ScheduledEvent, Scheduler, fire_message
+
+if TYPE_CHECKING:
+    from tools.exa import ExaClient
+    from tools.firecrawl import FirecrawlClient
+    from tools.jina import JinaClient
 
 log = logging.getLogger("voice-agent.realtime")
 
@@ -76,8 +81,9 @@ class ToolDeps:
     forecast_url: str
     http_client: httpx.Client
     scheduler: Scheduler
-    exa_api_key: str = ""
-    reader_api_key: str = ""
+    firecrawl: FirecrawlClient | None = None
+    exa: ExaClient | None = None
+    jina: JinaClient | None = None
     fetch_client: httpx.Client = field(default_factory=httpx.Client)
 
 

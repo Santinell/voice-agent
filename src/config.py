@@ -185,19 +185,23 @@ class Settings:
     channels: int
     block_size: int  # frames per mic/speaker block
     wake_word: WakeWordSettings = field(default_factory=WakeWordSettings)
-    # Persistent store for timer/alarm/reminder events (SQLite). Lazy-opened.
-    schedule_db: Path = Path(".local/schedule.db")
+    # Persistent store (SQLite): scheduled events, stored secrets. Migrated on
+    # startup via yoyo; the connection is owned by the app and shared by stores.
+    db_path: Path = Path(".local/agent.db")
     # IANA timezone (e.g. "Europe/Moscow") for scheduling clock times; empty =
     # system local. Times render and are interpreted in 24-hour format.
     timezone: str = ""
     # Console logging verbosity: a standard logging level name (DEBUG/INFO/
     # WARNING/ERROR/CRITICAL), case-insensitive. Invalid names fall back to INFO.
     log_level: str = "INFO"
-    # Web tools (optional). Both work without a key via free fallback:
-    # EXA_API_KEY → Exa search, else DuckDuckGo HTML. READER_API_KEY → Jina
-    # Reader (500 RPM), else Jina Reader anonymous (20 RPM), else direct fetch.
+    # Web tools (optional). All degrade gracefully to a free fallback:
+    # FIRECRAWL_API_KEY → Firecrawl search & scrape (primary). JINA_API_KEY →
+    # Jina search & reader; without it JinaClient auto-mints a trial key from
+    # keygen.jina.ai. EXA_API_KEY → Exa search & page text (third fallback),
+    # else DuckDuckGo HTML / direct fetch.
+    firecrawl_api_key: str = ""
     exa_api_key: str = ""
-    reader_api_key: str = ""
+    jina_api_key: str = ""
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -220,11 +224,12 @@ class Settings:
             channels=1,
             block_size=int(_get("BLOCK_SIZE", "1920")),  # 80 ms @ 24 kHz
             wake_word=WakeWordSettings.from_env(),
-            schedule_db=Path(_get("SCHEDULE_DB", ".local/schedule.db")).expanduser(),
+            db_path=Path(_get("AGENT_DB", ".local/agent.db")).expanduser(),
             timezone=_get("TIMEZONE", "").strip(),
             log_level=_resolve_log_level(_get("LOG_LEVEL", "INFO")),
             exa_api_key=_get("EXA_API_KEY", "").strip(),
-            reader_api_key=_get("READER_API_KEY", "").strip(),
+            jina_api_key=_get("JINA_API_KEY", "").strip(),
+            firecrawl_api_key=_get("FIRECRAWL_API_KEY", "").strip(),
         )
 
 

@@ -25,7 +25,6 @@ import threading
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta, tzinfo
-from pathlib import Path
 from typing import Any
 
 from localization import LocaleStr
@@ -357,48 +356,25 @@ def fire_message(event: ScheduledEvent, language: str, tz: tzinfo) -> str:
 # ── SQLite store ────────────────────────────────────────────────────────────
 
 
-_SCHEMA = """
-CREATE TABLE IF NOT EXISTS scheduled_events (
-    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    kind       TEXT    NOT NULL,
-    label      TEXT,
-    fire_at    TEXT    NOT NULL,
-    weekdays   TEXT,
-    enabled    INTEGER NOT NULL DEFAULT 1,
-    created_at TEXT    NOT NULL
-)
-"""
-
-
 class SchedulerStore:
     """Thread-safe SQLite persistence for scheduled events.
 
-    The connection is opened lazily (on first use) so constructing a store —
-    e.g. while wiring the app in tests that never start the scheduler — does
-    not touch the filesystem.
+    The connection is injected (the app owns one long-lived connection, shared
+    with the secrets store) and is expected to point at a DB whose schema is
+    already migrated — see :mod:`db`. ``close``/``ensure`` are retained as
+    no-op / pass-through so :class:`Scheduler` keeps working unchanged.
     """
 
-    def __init__(self, path: str | Path) -> None:
-        self._path = Path(path)
+    def __init__(self, conn: sqlite3.Connection) -> None:
+        self._conn = conn
         self._lock = threading.Lock()
-        self._conn: sqlite3.Connection | None = None
 
     def close(self) -> None:
-        with self._lock:
-            if self._conn is not None:
-                self._conn.close()
-                self._conn = None
+        # The app owns the connection's lifetime; the store does not close it.
+        pass
 
     def ensure(self) -> sqlite3.Connection:
-        """Open the connection lazily; safe to call from any thread."""
-        if self._conn is None:
-            self._path.parent.mkdir(parents=True, exist_ok=True)
-            conn = sqlite3.connect(str(self._path), check_same_thread=False, isolation_level=None)
-            conn.row_factory = sqlite3.Row
-            conn.execute("PRAGMA journal_mode=WAL")
-            conn.execute("PRAGMA synchronous=NORMAL")
-            conn.executescript(_SCHEMA)
-            self._conn = conn
+        """Return the injected connection (kept for Scheduler compatibility)."""
         return self._conn
 
     # ── write ──

@@ -9,6 +9,7 @@ output is sent as function_call_output → response.create is requested.
 from __future__ import annotations
 
 import base64
+import sqlite3
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -140,7 +141,27 @@ def _settings(**overrides: Any) -> Settings:
 
 
 def _make_scheduler() -> Scheduler:
-    return Scheduler(SchedulerStore(":memory:"), tz=UTC)
+    return Scheduler(SchedulerStore(_mem_conn()), tz=UTC)
+
+
+def _mem_conn() -> sqlite3.Connection:
+    """An in-memory connection carrying the scheduled_events schema."""
+    conn = sqlite3.connect(":memory:", check_same_thread=False, isolation_level=None)
+    conn.row_factory = sqlite3.Row
+    conn.execute(
+        """
+        CREATE TABLE scheduled_events (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            kind       TEXT    NOT NULL,
+            label      TEXT,
+            fire_at    TEXT    NOT NULL,
+            weekdays   TEXT,
+            enabled    INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT    NOT NULL
+        )
+        """
+    )
+    return conn
 
 
 def _make_client(**settings_overrides: Any) -> tuple[RealtimeClient, ToolDeps]:

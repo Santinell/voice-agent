@@ -1,22 +1,34 @@
 """``web_search`` tool — internet search with a keyless fallback.
 
-Primary backend is Exa (https://exa.ai) when ``EXA_API_KEY`` is set; otherwise,
-and as a fallback if Exa is unavailable, it falls back to the keyless
-DuckDuckGo HTML endpoint. Either way the caller gets a small list of
-``{title, url, snippet}`` rendered into a localised string.
+Backends, tried in order (each a graceful fallback for the next):
 
-Both backends are queried over the shared ``httpx.Client``. A slow or hung
-search must never block the voice loop, so each request carries its own
-``_TIMEOUT``; any ``httpx.HTTPError`` (including Exa auth/quota failures) is
-caught and the tool transparently degrades to the fallback.
+  1. Firecrawl (https://firecrawl.dev) via ``FirecrawlClient`` when one is
+     provided — primary backend when ``FIRECRAWL_API_KEY`` is set.
+  2. Jina (https://jina.ai) via ``JinaClient`` when one is provided — it
+     manages its own key (``JINA_API_KEY`` or an auto-minted trial key).
+  3. Exa (https://exa.ai) via ``ExaClient`` when one is provided — keyed
+     backend (``EXA_API_KEY``).
+  4. The keyless DuckDuckGo HTML endpoint.
+
+Either way the caller gets a small list of ``{title, url, snippet}`` rendered
+into a localised string. All backends are queried over the shared
+``httpx.Client``. A slow or hung search must never block the voice loop, so
+each request carries its own ``_TIMEOUT``; any ``httpx.HTTPError`` (including
+auth/quota failures) is caught and the tool transparently degrades to the
+next backend.
 """
 
 from __future__ import annotations
 
-from typing import Any, TypeAlias, cast
+from typing import TYPE_CHECKING, Any, TypeAlias
 
 import httpx
 from bs4 import BeautifulSoup
+
+if TYPE_CHECKING:
+    from tools.exa import ExaClient
+    from tools.firecrawl import FirecrawlClient
+    from tools.jina import JinaClient
 
 from localization import LocaleStr
 
@@ -47,7 +59,6 @@ _MSG_SERVICE = LocaleStr(
 
 _MAX_RESULTS = 5
 _TIMEOUT = httpx.Timeout(8.0, connect=5.0)
-_EXA_URL = "https://api.exa.ai/search"
 _DDG_URL = "https://html.duckduckgo.com/html/"
 # A realistic desktop UA keeps the keyless DDG endpoint from serving a bot wall.
 _USER_AGENT = (
@@ -55,41 +66,11 @@ _USER_AGENT = (
     "Chrome/126.0 Safari/537.36"
 )
 
-# Normalised result row shared by both backends.
+# Normalised result row shared by all backends.
 _Hit: TypeAlias = dict[str, str]
 
 
 # ── backends ────────────────────────────────────────────────────────────────
-
-
-def _exa_search(query: str, *, api_key: str, client: httpx.Client) -> list[_Hit]:
-    """Query Exa and return up to ``_MAX_RESULTS`` rows. Raises on HTTP error."""
-    resp = client.post(
-        _EXA_URL,
-        headers={"x-api-key": api_key, "Content-Type": "application/json"},
-        json={
-            "query": query,
-            "numResults": _MAX_RESULTS,
-            "contents": {"text": {"maxCharacters": 280}},
-        },
-        timeout=_TIMEOUT,
-    )
-    resp.raise_for_status()
-    payload = cast(dict[str, Any], resp.json())
-    raw_results = payload.get("results")
-    results = cast(list[dict[str, Any]], raw_results if isinstance(raw_results, list) else [])
-    hits: list[_Hit] = []
-    for r in results:
-        text = str(r.get("text") or "").strip()
-        url = str(r.get("url") or "").strip()
-        hits.append(
-            {
-                "title": str(r.get("title") or "").strip() or url,
-                "url": url,
-                "snippet": text,
-            }
-        )
-    return hits[:_MAX_RESULTS]
 
 
 def _ddg_search(query: str, *, client: httpx.Client) -> list[_Hit]:
@@ -141,26 +122,38 @@ def _render(hits: list[_Hit], *, language: str, query: str) -> str:
 # ── public entry point ──────────────────────────────────────────────────────
 
 
-def search(query: str, *, language: str, exa_api_key: str, client: httpx.Client) -> str:
+def search(
+    query: str,
+    *,
+    language: str,
+    client: httpx.Client,
+    firecrawl: FirecrawlClient | None = None,
+    jina: JinaClient | None = None,
+    exa: ExaClient | None = None,
+) -> str:
     """Search the web for ``query`` and return a localised result list.
 
-    Uses Exa when ``exa_api_key`` is set, transparently falling back to the
-    keyless DuckDuckGo endpoint if Exa fails or is unconfigured. Never raises
-    on expected failures — returns a localised message for the LLM to relay.
+    Tries Firecrawl → Jina → Exa → keyless DuckDuckGo, each a graceful fallback
+    for the next. Never raises on expected failures — returns a localised
+    message for the LLM to relay.
     """
     if not query or not query.strip():
         return _MSG_BAD_QUERY.render(language)
     query = query.strip()
 
-    if exa_api_key:
+    # 1–3) Keyed backends in priority order. Each raises ``httpx.HTTPError`` on
+    # failure and returns an empty list when it has no results.
+    for backend in (firecrawl, jina, exa):
+        if backend is None:
+            continue
         try:
-            hits = _exa_search(query, api_key=exa_api_key, client=client)
-            if hits:  # a real result set — render and return
-                return _render(hits, language=language, query=query)
-            # Exa returned nothing; fall through to the keyless backend.
+            hits = backend.search(query)
         except httpx.HTTPError:
-            pass  # fall through to the keyless backend
+            continue  # fall through to the next backend
+        if hits:
+            return _render(hits, language=language, query=query)
 
+    # 4) DuckDuckGo — keyless last resort.
     try:
         hits = _ddg_search(query, client=client)
     except httpx.HTTPError:

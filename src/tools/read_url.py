@@ -2,12 +2,19 @@
 
 Resolution order, each a graceful fallback for the next:
 
-  1. Jina Reader (``r.jina.ai``) — renders JS/SPAs server-side and returns
-     markdown. With ``READER_API_KEY``: 500 RPM; without: 20 RPM anonymous.
-  2. Direct fetch + local HTML→markdown — a plain ``GET`` on the URL (the
+  1. Firecrawl (``api.firecrawl.dev/v2/scrape``) via ``FirecrawlClient`` when
+     one is provided — renders JS/SPAs server-side and returns markdown.
+     Primary backend when ``FIRECRAWL_API_KEY`` is set.
+  2. Jina Reader (``r.jina.ai``) via ``JinaClient`` when one is provided —
+     renders JS/SPAs server-side and returns markdown. The client manages its
+     own key (``JINA_API_KEY`` or an auto-minted trial key).
+  3. Exa Contents (``api.exa.ai/contents``) via ``ExaClient`` when one is
+     provided — returns the page text server-side.
+  4. Direct fetch + local HTML→markdown — a plain ``GET`` on the URL (the
      ``fetch_client`` follows redirects) parsed by BeautifulSoup and converted
      with html2text. Works for static sites; for SPAs it returns only the
      initial HTML shell, which is the accepted limitation of this fallback.
+  5. Headless browser — only when step 4 returned an empty JS app shell.
 
 The output is capped (``_MAX_CHARS``) so a single page cannot overflow the
 LLM's context window. The tool never raises on expected failures: it returns a
@@ -17,7 +24,7 @@ localised message the LLM can relay to the user.
 from __future__ import annotations
 
 import re
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 
 import httpx
@@ -26,6 +33,11 @@ from html2text import HTML2Text
 
 from localization import LocaleStr
 from tools import _browser_fetch
+
+if TYPE_CHECKING:
+    from tools.exa import ExaClient
+    from tools.firecrawl import FirecrawlClient
+    from tools.jina import JinaClient
 
 # ── localised strings ───────────────────────────────────────────────────────
 
@@ -53,7 +65,6 @@ _MAX_CHARS = 4000  # cap so one page can't blow up the LLM context window
 # JS app shell rather than real content — a cue to try the headless browser.
 _SPA_MIN_TEXT = 200
 _TIMEOUT = httpx.Timeout(10.0, connect=5.0)
-_READER_BASE = "https://r.jina.ai/"
 _USER_AGENT = (
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
     "Chrome/126.0 Safari/537.36"
@@ -64,21 +75,6 @@ _DROP_TAGS = ("script", "style", "nav", "header", "footer", "noscript", "form", 
 
 
 # ── backends ────────────────────────────────────────────────────────────────
-
-
-def _read_via_jina(url: str, *, api_key: str, client: httpx.Client) -> str:
-    """Fetch ``url`` through Jina Reader; returns its markdown text.
-
-    Raises ``httpx.HTTPError`` on transport failures so the caller can fall
-    back. Reader prepends a ``Title: ...`` line; we return the body as-is and
-    let ``read_url`` derive a title from the first meaningful line.
-    """
-    headers = {"X-Return-Format": "markdown", "User-Agent": _USER_AGENT}
-    if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
-    resp = client.get(_READER_BASE + url, headers=headers, timeout=_TIMEOUT)
-    resp.raise_for_status()
-    return resp.text.strip()
 
 
 def _html_to_markdown(html: str) -> tuple[str, str]:
@@ -168,29 +164,6 @@ def _truncate(text: str) -> str:
     return text[: max(cut, 0)].rstrip() + " …"
 
 
-def _parse_reader(body: str, fallback_title: str) -> tuple[str, str]:
-    """Split a Jina Reader response into (title, markdown).
-
-    Reader prefixes metadata lines (``Title:``, ``URL:``, ``Markdown Content:``)
-    before the page content. We extract the title and return the remaining body
-    as markdown, so the final output is a clean ``{title}\\n\\n{markdown}``.
-    """
-    title = fallback_title
-    content_lines: list[str] = []
-    seen_marker = False  # True once we pass the "Markdown Content:" preamble
-    for line in body.splitlines():
-        stripped = line.strip()
-        if stripped.startswith("Title:"):
-            title = stripped[len("Title:") :].strip() or fallback_title
-            continue
-        if stripped.startswith(("URL:", "Markdown Content:")):
-            seen_marker = seen_marker or stripped.startswith("Markdown Content:")
-            continue
-        content_lines.append(line)
-    markdown = "\n".join(content_lines).strip() if seen_marker else body.strip()
-    return title, markdown
-
-
 # ── public entry point ──────────────────────────────────────────────────────
 
 
@@ -198,18 +171,22 @@ def read_url(
     url: str,
     *,
     language: str,
-    reader_api_key: str,
     client: httpx.Client,
     fetch_client: httpx.Client,
+    firecrawl: FirecrawlClient | None = None,
+    jina: JinaClient | None = None,
+    exa: ExaClient | None = None,
 ) -> str:
     """Fetch ``url`` and return its content as a localised text string.
 
     Resolution order, each a graceful fallback for the next:
-      1. Jina Reader — renders JS/SPAs server-side.
-      2. Direct fetch + local HTML→markdown.
-      3. Headless browser — only when step 2 returned an empty JS app shell
+      1. Firecrawl — primary backend; renders JS/SPAs server-side.
+      2. Jina Reader — renders JS/SPAs server-side (key managed by the client).
+      3. Exa Contents — returns the page text server-side.
+      4. Direct fetch + local HTML→markdown.
+      5. Headless browser — only when step 4 returned an empty JS app shell
          (an SPA whose content is built client-side). Renders the page with a
-         system Chromium-based browser, then converts as in step 2.
+         system Chromium-based browser, then converts as in step 4.
 
     Never raises on expected failures.
     """
@@ -217,19 +194,21 @@ def read_url(
         return _MSG_BAD_URL.render(language, url=url)
     url = url.strip()
 
-    # 1) Jina Reader — handles JS/SPAs server-side.
-    try:
-        body = _read_via_jina(url, api_key=reader_api_key, client=client)
-        if body:
-            title, markdown = _parse_reader(body, fallback_title=url)
-            if markdown:
-                return _MSG_CONTENT.render(
-                    language, title=title, markdown=_truncate(markdown)
-                )
-    except httpx.HTTPError:
-        pass  # fall through to the direct fetch
+    # 1–3) Keyed readers in priority order. Each raises ``httpx.HTTPError`` on
+    # failure and returns an empty markdown when the page yielded no content.
+    for reader in (firecrawl, jina, exa):
+        if reader is None:
+            continue
+        try:
+            title, markdown = reader.read(url)
+        except httpx.HTTPError:
+            continue  # fall through to the next backend
+        if markdown:
+            return _MSG_CONTENT.render(
+                language, title=title or url, markdown=_truncate(markdown)
+            )
 
-    # 2) Direct fetch + local conversion.
+    # 4) Direct fetch + local conversion.
     try:
         result = _read_direct(url, client=fetch_client)
     except httpx.HTTPError:
@@ -238,7 +217,7 @@ def read_url(
         return _MSG_SERVICE.render(language, url=url)
     title, markdown, raw_html = result
 
-    # 3) Headless browser — only for a detected SPA shell with no static text.
+    # 5) Headless browser — only for a detected SPA shell with no static text.
     if not markdown and _looks_like_spa(raw_html, text_len=len(markdown)):
         rendered = _browser_fetch.fetch_rendered(url)
         if rendered:

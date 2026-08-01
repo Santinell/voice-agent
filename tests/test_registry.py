@@ -88,8 +88,9 @@ class _FakeDeps:
         self.http_client = httpx.Client(transport=t)
         self.fetch_client = httpx.Client(transport=t)
         self.scheduler = _FakeScheduler()
-        self.exa_api_key = ""
-        self.reader_api_key = ""
+        self.firecrawl = None
+        self.exa = None
+        self.jina = None
 
 
 _ALL_TOOLS = {

@@ -30,6 +30,7 @@ dependencies = [
   # already-installed system Chromium-based browser (brave/yandex/chromium);
   # no browser binary ships with the package.
   "pychrome>=0.2.4",
+  "yoyo-migrations>=9.0.0",
 ]
 
 [project.optional-dependencies]

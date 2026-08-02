@@ -20,7 +20,7 @@ on the client side.
 
 ```
 speech-to-speech server (off-the-shelf)        our client
-┌────────────────────────────────────┐     ┌───────────────────────────────┐
+┌────────────────────────────────────┐     ┌────────────────────────────────┐
 │ VAD → STT → LLM(GLM-5) → TTS       │◄───►│ mic → input_audio_buffer       │
 │ ws://localhost:8765/v1/realtime    │ WS  │ response.audio.delta → speaker │
 │ streaming + barge-in               │     │ local wake gate → earcon       │
@@ -29,7 +29,7 @@ speech-to-speech server (off-the-shelf)        our client
                                            │   • get_weather (Open-Meteo)   │
                                            │   • calculate (safe ast eval)  │
                                            │ → function_call_output         │
-                                           └───────────────────────────────┘
+                                           └────────────────────────────────┘
 ```
 
 ## Quick start
@@ -60,7 +60,7 @@ it, then starts the client:
 ./start.sh
 ```
 
-Speak, ask "какая погода в Москве?" or "сколько будет 12 умножить на 8".
+Speak, ask "What is the weather?" or "What is 12 multiplied by 8?".
 
 ## Wake word
 
